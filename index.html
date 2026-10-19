@@ -200,6 +200,9 @@ body{background:#FAF8F4}
 #lrm-page .vt-replay:hover{background:rgba(20,20,20,.85)}
 #lrm-page .vt-replay svg{width:18px;height:18px;display:block}
 #lrm-page .vt-video.playing .vt-replay{opacity:1;visibility:visible;pointer-events:auto}
+/* Time watched / total time (bottom right of each video) */
+#lrm-page .vt-time{position:absolute;z-index:5;right:12px;bottom:12px;height:28px;display:flex;align-items:center;padding:0 9px;border-radius:4px;background:rgba(20,20,20,.6);color:#fff;font-family:var(--mono);font-size:12.5px;font-weight:500;letter-spacing:.02em;line-height:1;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .25s ease}
+#lrm-page .vt-video.has-time .vt-time{opacity:1}
 #lrm-page .vt-who{margin-top:14px;line-height:1.35}
 #lrm-page .vt-who b{display:block;font-family:var(--serif);font-weight:700;font-size:16px;color:var(--ink)}
 #lrm-page .vt-who span{font-family:var(--mono);font-size:12px;color:var(--slate)}
@@ -220,6 +223,7 @@ body{background:#FAF8F4}
   #lrm-page .vt-port-wrap .vt-who{grid-column:2;grid-row:2;align-self:start;margin-top:0}
   #lrm-page .vt-port-wrap .vt-replay{left:8px;bottom:8px;width:30px;height:30px}
   #lrm-page .vt-port-wrap .vt-replay svg{width:15px;height:15px}
+  #lrm-page .vt-port-wrap .vt-time{right:8px;bottom:9px;height:24px;padding:0 6px;font-size:10.5px}
   #lrm-page .vt-port-wrap .vt-play{width:44px;height:44px;margin:-22px 0 0 -22px;box-shadow:0 0 0 6px rgba(232,163,23,.3)}
   #lrm-page .vt-port-wrap .vt-play:after{margin:-9px 0 0 -5px;border-left:15px solid var(--ink);border-top:9px solid transparent;border-bottom:9px solid transparent}
   #lrm-page .vt-play{width:60px;height:60px;margin:-30px 0 0 -30px}
@@ -630,6 +634,20 @@ var VIDEOS = [
     })();
   }
 
+  // Time display (bottom right): "0:21 / 0:45"
+  function fmtTime(t){
+    t = Math.max(0, Math.floor(t || 0));
+    var h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = t%60;
+    return (h ? h + ':' + pad(m) : m) + ':' + pad(s);
+  }
+  function showTime(box, cur, dur){
+    if (!dur || !isFinite(dur)) return;
+    var el = box.querySelector('.vt-time');
+    var txt = fmtTime(Math.min(cur, dur)) + ' / ' + fmtTime(dur);
+    if (el.textContent !== txt) el.textContent = txt;
+    box.classList.add('has-time');
+  }
+
   var registry = [];
   function initPlayer(box, id){
     var stage = box.querySelector('.vt-stage');   // first .vt-stage = the player
@@ -704,6 +722,12 @@ var VIDEOS = [
       if (player && player.seekTo){ player.unMute(); player.setVolume(100); player.seekTo(0, true); player.playVideo(); }
     });
 
+    // Keep the time display up to date.
+    setInterval(function(){
+      if (!ready || !player || !player.getDuration) return;
+      try { showTime(box, wantPlay ? player.getCurrentTime() : 0, player.getDuration()); } catch(x){}
+    }, 250);
+
     create();
   }
 
@@ -726,6 +750,9 @@ var VIDEOS = [
       box.classList.add('playing');
     });
     vid.addEventListener('ended', function(){ box.classList.remove('playing'); vid.currentTime = 0.1; });
+    function upd(){ showTime(box, vid.currentTime, vid.duration); }
+    ['loadedmetadata', 'durationchange', 'timeupdate', 'seeked'].forEach(function(evt){ vid.addEventListener(evt, upd); });
+    if (vid.readyState >= 1) upd();
   }
 
   VIDEOS.forEach(function(v){
@@ -740,6 +767,7 @@ var VIDEOS = [
         '<span class="vt-shade"></span><span class="vt-play"></span>' +
         '<button type="button" class="vt-hit" aria-label="Play video testimonial from ' + v.name + '"></button>' +
         '<button type="button" class="vt-replay" aria-label="Replay video"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>' +
+        '<span class="vt-time" aria-hidden="true"></span>' +
       '</div>' +
       '<div class="vt-who"><b>' + v.name + '</b><span>' + v.role + '</span></div>';
     document.getElementById(v.port ? 'vt-port' : 'vt-land').appendChild(item);
