@@ -185,7 +185,7 @@ body{background:#FAF8F4}
    YouTube doesn't draw its Shorts overlay (logo, buttons, channel name). Only the central 360x640
    window (the actual vertical video) is shown, scaled to fit the box (--ps, set by JS). */
 #lrm-page .vt-stage{position:absolute;left:0;width:100%;pointer-events:none;overflow:hidden}
-#lrm-page .vt-video.port .vt-stage{top:50%;left:50%;width:var(--pw,360px);height:640px;transform:translate(-50%,-50%) scale(var(--ps,.5));transform-origin:50% 50%}
+#lrm-page .vt-video.port .vt-stage{top:50%;left:50%;width:var(--pw,360px);height:640px;transform:translate(-50%,-50%) translateY(var(--py,0px)) scale(var(--ps,.5));transform-origin:50% 50%}
 #lrm-page .vt-video.land .vt-stage{top:50%;height:316.05%;transform:translateY(-50%) scale(1.012)}
 #lrm-page .vt-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none!important}
 #lrm-page .vt-poster{z-index:2;background:#141414;transition:opacity .45s ease}
@@ -548,8 +548,8 @@ var VIDEOS = [
   {id:'XhF-IdHypcQ', port:false, quote:'This programme gave me a 360 degree holistic growth on both personal and professional front.', name:'Satya Tirumala', role:'Vice President, Technology, Jefferies Investment Bank'},
   {id:'9aZyRnCvAlM', port:false, quote:'I became more aware of my strengths, more confident and ready for leadership.', name:'Aradhana Sabherwal', role:'Delivery Owner, Fitch Ratings'},
   /* portrait (underneath) */
-  {id:'4llhMJU5eYY', port:true, quote:'I got a clear direction and made the career pivot I wanted in a new role and new area.', name:'Lavanya Palayil', role:'Quality Engineering Leader, RM Plc'},
-  {id:'zBMgqkGI2vc', port:true, quote:'It transformed not just my career, but how I approach my entire life.', name:'Tripti Anil', role:'Senior Data Leader, Kellanova'},
+  {id:'4llhMJU5eYY', port:true, quote:'I got a clear direction and made the career pivot I wanted in a new role and new area.', name:'Lavanya Palayil', role:'Quality Engineering Leader, RM Plc', cropTop:72},
+  {id:'zBMgqkGI2vc', port:true, quote:'It transformed not just my career, but how I approach my entire life.', name:'Tripti Anil', role:'Senior Data Leader, Kellanova', cropTop:72},
   {id:'7YJIxMDDftI', port:true, quote:'I overcame my limiting beliefs and transformed my relationships with senior leadership.', name:'Jane Motha', role:'VP Global Rewards, Deutsche Bank'}
 ];
 
@@ -633,9 +633,14 @@ var VIDEOS = [
   // instead of the Shorts one (no Shorts logo / like button / channel name). The vertical video sits
   // in the middle at full height; we show just that middle 360px, scaled to fit the box. No zoom.
   var PORT_FRAME_W = 1138, PORT_VISIBLE_W = 360;
+  // cropTop (px of the 640px frame): trims YouTube's title bar off the top of the video. The window
+  // stays 9:16, so this is a small, even zoom (72px = about 12%) with the bottom left untouched.
   function fitPort(box){
+    var top = +box.getAttribute('data-croptop') || 0;
+    var winH = 640 - top, winW = winH * 9 / 16, sc = box.clientWidth / winW;
     box.style.setProperty('--pw', PORT_FRAME_W + 'px');
-    box.style.setProperty('--ps', (box.clientWidth / PORT_VISIBLE_W).toFixed(4));
+    box.style.setProperty('--ps', sc.toFixed(4));
+    box.style.setProperty('--py', (-(top / 2) * sc).toFixed(2) + 'px');
   }
   function watchPort(box){
     fitPort(box);
@@ -664,10 +669,11 @@ var VIDEOS = [
           host: 'https://www.youtube-nocookie.com',
           videoId: id,
           width: '100%', height: '100%',
-          playerVars: {autoplay:1, mute:1, controls:0, playsinline:1, rel:0, modestbranding:1, disablekb:1, fs:0, iv_load_policy:3},
+          playerVars: {autoplay:1, mute:1, cc_load_policy:0, controls:0, playsinline:1, rel:0, modestbranding:1, disablekb:1, fs:0, iv_load_policy:3},
           events: {
             onReady: function(e){
               if (myGen !== gen) return;
+              try { e.target.unloadModule('captions'); e.target.unloadModule('cc'); } catch(x){}   // subtitles off
               if (wantPlay){ e.target.unMute(); e.target.setVolume(100); e.target.playVideo(); started = true; }
             },
             onStateChange: function(e){
@@ -733,6 +739,7 @@ var VIDEOS = [
       '<div class="vt-who"><b>' + v.name + '</b><span>' + v.role + '</span></div>';
     document.getElementById(v.port ? 'vt-port' : 'vt-land').appendChild(item);
     var box = item.querySelector('.vt-video');
+    if (v.cropTop) box.setAttribute('data-croptop', v.cropTop);
     if (v.port) watchPort(box);
     loadThumb(box.querySelector('img'), v.id);
     if ('IntersectionObserver' in window){
