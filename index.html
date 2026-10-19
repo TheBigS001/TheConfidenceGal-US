@@ -175,21 +175,30 @@ body{background:#FAF8F4}
 #lrm-page .vt-title em{font-style:normal;color:var(--gold)}
 #lrm-page .vt-item{display:flex;flex-direction:column}
 #lrm-page .vt-quote{font-family:var(--serif);font-weight:700;font-size:17px;line-height:1.45;color:var(--ink);border-left:3px solid var(--gold);padding-left:12px;margin:0}
-#lrm-page .vt-video{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#141414;margin-top:16px;cursor:pointer;border:0;padding:0;display:block}
+#lrm-page .vt-video{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#141414;margin-top:16px;isolation:isolate}
 #lrm-page .vt-video.land{aspect-ratio:16/9}
 #lrm-page .vt-video.port{aspect-ratio:9/16}
-#lrm-page .vt-video img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-#lrm-page .vt-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-#lrm-page .vt-video .vt-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.45))}
-#lrm-page .vt-play{position:absolute;top:50%;left:50%;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 8px rgba(232,163,23,.3);transition:transform .2s ease}
+/* The stage holds the YouTube player. These videos were exported as vertical (9:16) files with
+   the landscape clip letterboxed in the middle, so for "land" we render the player at 9:16 and
+   scale it up so the landscape clip fills the whole box (black bars are cropped away). */
+#lrm-page .vt-stage{position:absolute;left:0;width:100%;pointer-events:none;overflow:hidden}
+#lrm-page .vt-video.port .vt-stage{top:0;height:100%}
+#lrm-page .vt-video.land .vt-stage{top:50%;height:316.05%;transform:translateY(-50%) scale(1.012)}
+#lrm-page .vt-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+#lrm-page .vt-poster{z-index:2;background:#141414;transition:opacity .45s ease}
+#lrm-page .vt-poster img{position:absolute;top:0;left:50%;height:100%;width:auto;max-width:none;transform:translateX(-50%)}
+#lrm-page .vt-video.ready .vt-poster{opacity:0}
+#lrm-page .vt-hit{position:absolute;inset:0;z-index:3;width:100%;height:100%;background:transparent;border:0;padding:0;cursor:pointer}
+#lrm-page .vt-shade{position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(0,0,0,.4))}
+#lrm-page .vt-play{position:absolute;z-index:4;pointer-events:none;top:50%;left:50%;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 8px rgba(232,163,23,.3);transition:transform .2s ease,opacity .25s ease}
 #lrm-page .vt-play:after{content:"";position:absolute;top:50%;left:50%;margin:-12px 0 0 -7px;border-left:20px solid var(--ink);border-top:12px solid transparent;border-bottom:12px solid transparent}
 #lrm-page .vt-video:hover .vt-play{transform:scale(1.08)}
+#lrm-page .vt-video.playing .vt-play,#lrm-page .vt-video.playing .vt-shade{opacity:0}
+#lrm-page .vt-video.playing:hover .vt-play{opacity:.85}
 #lrm-page .vt-who{margin-top:14px;line-height:1.35}
 #lrm-page .vt-who b{display:block;font-family:var(--serif);font-weight:700;font-size:16px;color:var(--ink)}
 #lrm-page .vt-who span{font-family:var(--mono);font-size:12px;color:var(--slate)}
-/* landscape: stacked on top, full width column */
 #lrm-page .vt-land-wrap{display:flex;flex-direction:column;gap:48px;max-width:820px;margin:44px auto 0}
-/* portrait: grid underneath */
 #lrm-page .vt-port-label{max-width:820px;margin:72px auto 0;font-family:var(--serif);font-weight:700;font-size:22px;color:var(--ink);text-align:center}
 #lrm-page .vt-port-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:40px 32px;max-width:1000px;margin:32px auto 0}
 #lrm-page .vt-port-wrap .vt-quote{min-height:100px}
@@ -200,6 +209,7 @@ body{background:#FAF8F4}
   #lrm-page .vt-port-wrap{grid-template-columns:1fr;gap:44px;max-width:380px}
   #lrm-page .vt-quote{font-size:18px}
   #lrm-page .vt-port-wrap .vt-quote{min-height:0}
+  #lrm-page .vt-play{width:60px;height:60px;margin:-30px 0 0 -30px}
 }
 
 /* Proof */
@@ -581,44 +591,87 @@ var VIDEOS = [
   cw.addEventListener('mouseenter', stop); cw.addEventListener('touchstart', stop, {passive:true});
 
   // Video testimonials
-  // Sharp thumbnails: request the highest-resolution YouTube poster (1280x720) and
-  // fall back to lower ones only if it doesn't exist for that video.
+  // Each video loads a real YouTube player (muted) as soon as it nears the screen, grabs its first
+  // frame at full resolution, then pauses. Until that frame is ready a thumbnail is shown.
+  var players = [], ytWaiting = [], ytLoaded = false;
+  function whenYT(fn){
+    if (window.YT && YT.Player) return fn();
+    ytWaiting.push(fn);
+    if (ytLoaded) return;
+    ytLoaded = true;
+    window.onYouTubeIframeAPIReady = function(){ var q = ytWaiting; ytWaiting = []; q.forEach(function(f){ f(); }); };
+    var sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc);
+  }
+
   var THUMBS = ['maxresdefault','sddefault','hqdefault'];
   function loadThumb(img, id){
     var step = 0;
-    function tryNext(){
+    (function tryNext(){
       if (step >= THUMBS.length) return;
-      var probe = new Image();
-      var name = THUMBS[step++];
-      probe.onload = function(){
-        // YouTube returns a 120x90 grey placeholder when a size doesn't exist
-        if (probe.naturalWidth > 200){ img.src = probe.src; } else { tryNext(); }
-      };
+      var probe = new Image(), name = THUMBS[step++];
+      probe.onload = function(){ if (probe.naturalWidth > 200) img.src = probe.src; else tryNext(); };
       probe.onerror = tryNext;
-      probe.src = 'https://i.ytimg.com/vi/'+id+'/'+name+'.jpg';
-    }
-    tryNext();
+      probe.src = 'https://i.ytimg.com/vi/' + id + '/' + name + '.jpg';
+    })();
   }
+
+  function initPlayer(box, id){
+    var slot = box.querySelector('.vt-slot');
+    var ready = false, wantPlay = false, player;
+    function showFrame(){ ready = true; box.classList.add('ready'); }
+    whenYT(function(){
+      player = new YT.Player(slot, {
+        host: 'https://www.youtube-nocookie.com',
+        videoId: id,
+        width: '100%', height: '100%',
+        playerVars: {autoplay:1, mute:1, controls:0, playsinline:1, rel:0, modestbranding:1, disablekb:1, fs:0, iv_load_policy:3},
+        events: {
+          onStateChange: function(e){
+            if (e.data === 1){ // playing
+              if (!ready && !wantPlay){
+                player.pauseVideo(); player.seekTo(0.2, true);
+                setTimeout(showFrame, 350);
+              } else { if (!ready) showFrame(); box.classList.add('playing'); }
+            } else if (e.data === 2 || e.data === 0){ // paused / ended
+              box.classList.remove('playing');
+              if (e.data === 0){ player.seekTo(0, true); player.pauseVideo(); }
+            }
+          }
+        }
+      });
+      players.push({box:box, get:function(){ return player; }});
+    });
+    box.querySelector('.vt-hit').addEventListener('click', function(){
+      if (!player || !player.getPlayerState) return;
+      if (player.getPlayerState() === 1){ player.pauseVideo(); return; }
+      wantPlay = true;
+      players.forEach(function(o){ if (o.box !== box && o.get() && o.get().pauseVideo) o.get().pauseVideo(); });
+      player.unMute(); player.setVolume(100);
+      if (!ready) showFrame();
+      player.playVideo();
+    });
+  }
+
   VIDEOS.forEach(function(v){
     var item = document.createElement('div'); item.className = 'vt-item';
     item.innerHTML =
-      '<p class="vt-quote">&ldquo;'+v.quote+'&rdquo;</p>'+
-      '<button type="button" class="vt-video '+(v.port?'port':'land')+'" data-yt="'+v.id+'" aria-label="Play video testimonial from '+v.name+'">'+
-        '<img alt="'+v.name+' video testimonial" decoding="async">'+
-        '<span class="vt-shade"></span><span class="vt-play"></span></button>'+
-      '<div class="vt-who"><b>'+v.name+'</b><span>'+v.role+'</span></div>';
+      '<p class="vt-quote">&ldquo;' + v.quote + '&rdquo;</p>' +
+      '<div class="vt-video ' + (v.port ? 'port' : 'land') + '">' +
+        '<div class="vt-stage"><div class="vt-slot"></div></div>' +
+        '<div class="vt-stage vt-poster"><img alt="' + v.name + ' video testimonial" decoding="async"></div>' +
+        '<span class="vt-shade"></span><span class="vt-play"></span>' +
+        '<button type="button" class="vt-hit" aria-label="Play video testimonial from ' + v.name + '"></button>' +
+      '</div>' +
+      '<div class="vt-who"><b>' + v.name + '</b><span>' + v.role + '</span></div>';
     document.getElementById(v.port ? 'vt-port' : 'vt-land').appendChild(item);
-    var btn = item.querySelector('.vt-video'), img = btn.querySelector('img');
-    loadThumb(img, v.id);
-    btn.addEventListener('click', function(){
-      if (btn.getAttribute('data-playing')) return;
-      var f = document.createElement('iframe');
-      f.src = 'https://www.youtube-nocookie.com/embed/'+v.id+'?autoplay=1&playsinline=1&rel=0&modestbranding=1';
-      f.title = 'Video testimonial from '+v.name;
-      f.setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen');
-      f.setAttribute('allowfullscreen','');
-      btn.innerHTML = ''; btn.appendChild(f); btn.setAttribute('data-playing','1');
-    });
+    var box = item.querySelector('.vt-video');
+    loadThumb(box.querySelector('img'), v.id);
+    if ('IntersectionObserver' in window){
+      var io = new IntersectionObserver(function(en){
+        if (en[0].isIntersecting){ io.disconnect(); initPlayer(box, v.id); }
+      }, {rootMargin: '600px 0px'});
+      io.observe(box);
+    } else { initPlayer(box, v.id); }
   });
 })();
 </script>
