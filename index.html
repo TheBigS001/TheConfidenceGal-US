@@ -188,13 +188,16 @@ body{background:#FAF8F4}
 #lrm-page .vt-poster{z-index:2;background:#141414;transition:opacity .45s ease}
 #lrm-page .vt-poster img{position:absolute;top:0;left:50%;height:100%;width:auto;max-width:none;transform:translateX(-50%)}
 #lrm-page .vt-video.ready .vt-poster{opacity:0}
-#lrm-page .vt-hit{position:absolute;inset:0;z-index:3;width:100%;height:100%;background:transparent;border:0;padding:0;cursor:pointer}
+#lrm-page .vt-hit{-webkit-tap-highlight-color:transparent;outline:0;position:absolute;inset:0;z-index:3;width:100%;height:100%;background:transparent;border:0;padding:0;cursor:pointer}
 #lrm-page .vt-shade{position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 55%,rgba(0,0,0,.4))}
 #lrm-page .vt-play{position:absolute;z-index:4;pointer-events:none;top:50%;left:50%;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 8px rgba(232,163,23,.3);transition:transform .2s ease,opacity .25s ease}
 #lrm-page .vt-play:after{content:"";position:absolute;top:50%;left:50%;margin:-12px 0 0 -7px;border-left:20px solid var(--ink);border-top:12px solid transparent;border-bottom:12px solid transparent}
 #lrm-page .vt-video:hover .vt-play{transform:scale(1.08)}
-#lrm-page .vt-video.playing .vt-play,#lrm-page .vt-video.playing .vt-shade{opacity:0}
-#lrm-page .vt-video.playing:hover .vt-play{opacity:.85}
+#lrm-page .vt-video.playing .vt-play,#lrm-page .vt-video.playing .vt-shade,#lrm-page .vt-video.playing:hover .vt-play{opacity:0!important;visibility:hidden}
+#lrm-page .vt-replay{position:absolute;z-index:5;left:12px;bottom:12px;width:36px;height:36px;border-radius:50%;border:0;padding:0;background:rgba(20,20,20,.6);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;visibility:hidden;pointer-events:none;-webkit-tap-highlight-color:transparent;outline:0;transition:background .2s ease}
+#lrm-page .vt-replay:hover{background:rgba(20,20,20,.85)}
+#lrm-page .vt-replay svg{width:18px;height:18px;display:block}
+#lrm-page .vt-video.playing .vt-replay{opacity:1;visibility:visible;pointer-events:auto}
 #lrm-page .vt-who{margin-top:14px;line-height:1.35}
 #lrm-page .vt-who b{display:block;font-family:var(--serif);font-weight:700;font-size:16px;color:var(--ink)}
 #lrm-page .vt-who span{font-family:var(--mono);font-size:12px;color:var(--slate)}
@@ -213,6 +216,8 @@ body{background:#FAF8F4}
   #lrm-page .vt-port-wrap .vt-video{grid-column:1;grid-row:1 / span 2;margin-top:0}
   #lrm-page .vt-port-wrap .vt-quote{grid-column:2;grid-row:1;align-self:end;min-height:0;font-size:15px;padding-bottom:12px}
   #lrm-page .vt-port-wrap .vt-who{grid-column:2;grid-row:2;align-self:start;margin-top:0}
+  #lrm-page .vt-port-wrap .vt-replay{left:8px;bottom:8px;width:30px;height:30px}
+  #lrm-page .vt-port-wrap .vt-replay svg{width:15px;height:15px}
   #lrm-page .vt-port-wrap .vt-play{width:44px;height:44px;margin:-22px 0 0 -22px;box-shadow:0 0 0 6px rgba(232,163,23,.3)}
   #lrm-page .vt-port-wrap .vt-play:after{margin:-9px 0 0 -5px;border-left:15px solid var(--ink);border-top:9px solid transparent;border-bottom:9px solid transparent}
   #lrm-page .vt-play{width:60px;height:60px;margin:-30px 0 0 -30px}
@@ -620,41 +625,80 @@ var VIDEOS = [
     })();
   }
 
+  var registry = [];
   function initPlayer(box, id){
-    var slot = box.querySelector('.vt-slot');
-    var ready = false, wantPlay = false, player;
-    function showFrame(){ ready = true; box.classList.add('ready'); }
-    whenYT(function(){
-      player = new YT.Player(slot, {
-        host: 'https://www.youtube-nocookie.com',
-        videoId: id,
-        width: '100%', height: '100%',
-        playerVars: {autoplay:1, mute:1, controls:0, playsinline:1, rel:0, modestbranding:1, disablekb:1, fs:0, iv_load_policy:3},
-        events: {
-          onStateChange: function(e){
-            if (e.data === 1){ // playing
-              if (!ready && !wantPlay){
-                player.pauseVideo(); player.seekTo(0.2, true);
-                setTimeout(showFrame, 350);
-              } else { if (!ready) showFrame(); box.classList.add('playing'); }
-            } else if (e.data === 2 || e.data === 0){ // paused / ended
-              box.classList.remove('playing');
-              if (e.data === 0){ player.seekTo(0, true); player.pauseVideo(); }
+    var stage = box.querySelector('.vt-stage');   // first .vt-stage = the player
+    var hit = box.querySelector('.vt-hit');
+    var replay = box.querySelector('.vt-replay');
+    var player = null, ready = false, wantPlay = false, started = false, gen = 0;
+    var api = {pause: function(){ if (player && player.pauseVideo && box.classList.contains('playing')){ player.pauseVideo(); box.classList.remove('playing'); } }};
+    registry.push(api);
+
+    // Builds a fresh muted player that shows its first frame, then pauses (the default state).
+    function create(){
+      var myGen = ++gen;
+      ready = false; wantPlay = false; started = false; player = null;
+      stage.innerHTML = '<div class="vt-slot"></div>';
+      box.classList.remove('ready', 'playing');
+      whenYT(function(){
+        if (myGen !== gen) return;
+        var p = new YT.Player(stage.querySelector('.vt-slot'), {
+          host: 'https://www.youtube-nocookie.com',
+          videoId: id,
+          width: '100%', height: '100%',
+          playerVars: {autoplay:1, mute:1, controls:0, playsinline:1, rel:0, modestbranding:1, disablekb:1, fs:0, iv_load_policy:3},
+          events: {
+            onReady: function(e){
+              if (myGen !== gen) return;
+              if (wantPlay){ e.target.unMute(); e.target.setVolume(100); e.target.playVideo(); started = true; }
+            },
+            onStateChange: function(e){
+              if (myGen !== gen) return;
+              if (e.data === 1){                      // playing
+                if (!ready && !wantPlay){             // first-frame grab: pause and show it
+                  p.pauseVideo(); p.seekTo(0.2, true);
+                  setTimeout(function(){ if (myGen === gen){ ready = true; box.classList.add('ready'); } }, 350);
+                } else {
+                  ready = true; box.classList.add('ready', 'playing');
+                }
+              } else if (e.data === 2){               // paused by the viewer: stay where it is
+                if (wantPlay) box.classList.remove('playing');
+              } else if (e.data === 0 && wantPlay){   // finished -> back to the default look
+                gen++; try { p.destroy(); } catch(x){} create();
+              }
             }
           }
-        }
+        });
+        player = p;
       });
-      players.push({box:box, get:function(){ return player; }});
-    });
-    box.querySelector('.vt-hit').addEventListener('click', function(){
-      if (!player || !player.getPlayerState) return;
-      if (player.getPlayerState() === 1){ player.pauseVideo(); return; }
+    }
+
+    // Tap the video: pause if playing, otherwise play / continue from where it was left off.
+    hit.addEventListener('click', function(){
+      if (box.classList.contains('playing')){
+        if (player && player.pauseVideo) player.pauseVideo();
+        box.classList.remove('playing');
+        return;
+      }
+      registry.forEach(function(o){ if (o !== api) o.pause(); });   // one video at a time
       wantPlay = true;
-      players.forEach(function(o){ if (o.box !== box && o.get() && o.get().pauseVideo) o.get().pauseVideo(); });
-      player.unMute(); player.setVolume(100);
-      if (!ready) showFrame();
-      player.playVideo();
+      box.classList.add('playing');                                  // hides play icon, shows replay
+      if (player && player.playVideo){
+        player.unMute(); player.setVolume(100);
+        if (!started){ player.seekTo(0, true); started = true; }
+        player.playVideo();
+      }                                                              // else onReady starts it
     });
+
+    // Replay button (only visible while playing): restart from the beginning.
+    replay.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      wantPlay = true; started = true;
+      box.classList.add('playing');
+      if (player && player.seekTo){ player.unMute(); player.setVolume(100); player.seekTo(0, true); player.playVideo(); }
+    });
+
+    create();
   }
 
   VIDEOS.forEach(function(v){
@@ -666,6 +710,7 @@ var VIDEOS = [
         '<div class="vt-stage vt-poster"><img alt="' + v.name + ' video testimonial" decoding="async"></div>' +
         '<span class="vt-shade"></span><span class="vt-play"></span>' +
         '<button type="button" class="vt-hit" aria-label="Play video testimonial from ' + v.name + '"></button>' +
+        '<button type="button" class="vt-replay" aria-label="Replay video"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>' +
       '</div>' +
       '<div class="vt-who"><b>' + v.name + '</b><span>' + v.role + '</span></div>';
     document.getElementById(v.port ? 'vt-port' : 'vt-land').appendChild(item);
