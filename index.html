@@ -181,10 +181,12 @@ body{background:#FAF8F4}
 /* The stage holds the YouTube player. Landscape clips were exported as vertical (9:16) files with
    the clip letterboxed in the middle, so for "land" we render the player at 9:16 and scale it up
    so the clip fills the whole box (black bars are cropped away).
-   Portrait clips are YouTube Shorts: the player is scaled up inside the clipped box so YouTube's
-   own overlay (Shorts logo, like button, channel name, captions) falls outside the visible area. */
+   Portrait clips are YouTube Shorts: the player is always rendered at a fixed 360x640 (so YouTube's
+   overlay stays the same pixel size on every screen), then only the central 240x427 window is shown
+   and scaled to fit the box (--ps, set by JS). That crops the Shorts logo, buttons, channel name
+   and captions out of view on phones and desktops alike. */
 #lrm-page .vt-stage{position:absolute;left:0;width:100%;pointer-events:none;overflow:hidden}
-#lrm-page .vt-video.port .vt-stage{top:0;height:100%;transform:scale(1.22);transform-origin:50% 50%}
+#lrm-page .vt-video.port .vt-stage{top:50%;left:50%;width:360px;height:640px;transform:translate(-50%,-50%) scale(var(--ps,.5));transform-origin:50% 50%}
 #lrm-page .vt-video.land .vt-stage{top:50%;height:316.05%;transform:translateY(-50%) scale(1.012)}
 #lrm-page .vt-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 #lrm-page .vt-poster{z-index:2;background:#141414;transition:opacity .45s ease}
@@ -627,6 +629,15 @@ var VIDEOS = [
     })();
   }
 
+  // Portrait (Shorts) boxes: show only the central 240px-wide window of the 360px-wide player
+  var VISIBLE_W = 240;
+  function fitPort(box){ box.style.setProperty('--ps', (box.clientWidth / VISIBLE_W).toFixed(4)); }
+  function watchPort(box){
+    fitPort(box);
+    if (window.ResizeObserver) new ResizeObserver(function(){ fitPort(box); }).observe(box);
+    else window.addEventListener('resize', function(){ fitPort(box); });
+  }
+
   var registry = [];
   function initPlayer(box, id){
     var stage = box.querySelector('.vt-stage');   // first .vt-stage = the player
@@ -717,6 +728,7 @@ var VIDEOS = [
       '<div class="vt-who"><b>' + v.name + '</b><span>' + v.role + '</span></div>';
     document.getElementById(v.port ? 'vt-port' : 'vt-land').appendChild(item);
     var box = item.querySelector('.vt-video');
+    if (v.port) watchPort(box);
     loadThumb(box.querySelector('img'), v.id);
     if ('IntersectionObserver' in window){
       var io = new IntersectionObserver(function(en){
