@@ -178,11 +178,13 @@ body{background:#FAF8F4}
 #lrm-page .vt-video{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#141414;margin-top:16px;isolation:isolate}
 #lrm-page .vt-video.land{aspect-ratio:16/9}
 #lrm-page .vt-video.port{aspect-ratio:9/16}
-/* The stage holds the YouTube player. These videos were exported as vertical (9:16) files with
-   the landscape clip letterboxed in the middle, so for "land" we render the player at 9:16 and
-   scale it up so the landscape clip fills the whole box (black bars are cropped away). */
+/* The stage holds the YouTube player. Landscape clips were exported as vertical (9:16) files with
+   the clip letterboxed in the middle, so for "land" we render the player at 9:16 and scale it up
+   so the clip fills the whole box (black bars are cropped away).
+   Portrait clips are YouTube Shorts: the player is scaled up inside the clipped box so YouTube's
+   own overlay (Shorts logo, like button, channel name, captions) falls outside the visible area. */
 #lrm-page .vt-stage{position:absolute;left:0;width:100%;pointer-events:none;overflow:hidden}
-#lrm-page .vt-video.port .vt-stage{top:0;height:100%}
+#lrm-page .vt-video.port .vt-stage{top:0;height:100%;transform:scale(1.22);transform-origin:50% 50%}
 #lrm-page .vt-video.land .vt-stage{top:50%;height:316.05%;transform:translateY(-50%) scale(1.012)}
 #lrm-page .vt-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 #lrm-page .vt-poster{z-index:2;background:#141414;transition:opacity .45s ease}
@@ -351,7 +353,7 @@ body{background:#FAF8F4}
       </div>
       <div class="hero-stats">
         <div class="hero-stat"><b>20+ Years</b>Corporate and leadership experience, including an MD role.</div>
-        <div class="hero-stat"><b>45+ Organisations</b>Coached professionals across banking, financial services, technology and consulting.</div>
+        <div class="hero-stat"><b>45 Organisations</b>Coached professionals across banking, financial services, technology and consulting.</div>
         <div class="hero-stat"><b>1,500+ Professionals</b>Have attended this masterclass and left with a clear roadmap to leadership.</div>
       </div>
     </div>
@@ -466,7 +468,7 @@ body{background:#FAF8F4}
       <p style="margin-top:24px">When I moved to the UK, I believed hard work alone would get me there. It didn't. For years, I stayed stuck while others, sometimes with less experience, moved ahead. I was capable but I simply didn't understand how leadership readiness was really judged inside large organisations.</p>
       <p>Once I did, everything changed.</p>
       <p>Over the next four years, I earned three consecutive promotions, eventually becoming a Managing Director at NatWest Group. More importantly, I stopped being seen as the person who delivered the work and started being trusted to lead it.</p>
-      <p>Today, I help experienced women in banking, finance and technology make that same transition. Professionals from 45+ organisations across the UK have worked with me to secure promotions, communicate with greater influence, build executive presence and confidently step into bigger leadership roles.</p>
+      <p>Today, I help experienced women in banking, finance and technology make that same transition. Professionals from 45 organisations across the UK have worked with me to secure promotions, communicate with greater influence, build executive presence and confidently step into bigger leadership roles.</p>
       <p class="signoff">I am not here to tell you to "speak up more" or simply become more confident. I will show you why capable women professionals become stuck and how leadership decisions are actually formed inside organisations like yours.</p>
     </div>
   </div></div>
